@@ -1,6 +1,7 @@
 package ru.code4a.quarkus.hibernate.mutator.utils.cast
 
-import ru.code4a.quarkus.automapper.utils.nullable.unwrapElseThrow
+import ru.code4a.quarkus.hibernate.mutator.utils.nullable.unwrapElseThrow
+
 
 inline fun <reified T> Any?.castNullableElseThrow(exceptionGetter: () -> Throwable): T {
   val notNullValue = unwrapElseThrow(exceptionGetter)

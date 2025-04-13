@@ -349,8 +349,8 @@ class HibernateEntityMutators {
         throw NotImplementedError("Not implemented ${associationInfo.clazz}::${associationInfo.field.name}.")
       }
 
-      Companion.entityCollectionMutators = entityCollectionMutators
-      Companion.entityRefMutators = entityRefMutators
+      this.entityCollectionMutators = entityCollectionMutators
+      this.entityRefMutators = entityRefMutators
     }
   }
 }

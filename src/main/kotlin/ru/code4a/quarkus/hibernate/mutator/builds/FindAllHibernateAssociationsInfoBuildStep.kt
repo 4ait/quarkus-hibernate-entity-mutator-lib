@@ -6,6 +6,7 @@ import io.quarkus.deployment.builditem.CombinedIndexBuildItem
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
+import jakarta.persistence.OneToOne
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -48,7 +49,7 @@ class FindAllHibernateAssociationsInfoBuildStep {
     val oneToOneFieldsMap =
       combinedIndex
         .index
-        .getAnnotations(ManyToOne::class.java)
+        .getAnnotations(OneToOne::class.java)
         .filter {
           it.target().kind() == org.jboss.jandex.AnnotationTarget.Kind.FIELD
         }

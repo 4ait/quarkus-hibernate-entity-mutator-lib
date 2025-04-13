@@ -45,6 +45,18 @@ class FindAllHibernateAssociationsInfoBuildStep {
         }
         .associateBy { ClassWithField(it.declaringClass().name().toString(), it.name()) }
 
+    val oneToOneFieldsMap =
+      combinedIndex
+        .index
+        .getAnnotations(ManyToOne::class.java)
+        .filter {
+          it.target().kind() == org.jboss.jandex.AnnotationTarget.Kind.FIELD
+        }
+        .map {
+          it.target().asField()
+        }
+        .associateBy { ClassWithField(it.declaringClass().name().toString(), it.name()) }
+
     val associations = mutableListOf<ClassWithField>()
 
     for (oneToManyField in oneToManyFieldsMap.values) {
@@ -62,6 +74,16 @@ class FindAllHibernateAssociationsInfoBuildStep {
         ClassWithField(
           className = manyToOneField.declaringClass().name().toString(),
           fieldName = manyToOneField.name(),
+        )
+
+      associations.add(classWithField)
+    }
+
+    for (oneToOneField in oneToOneFieldsMap.values) {
+      val classWithField =
+        ClassWithField(
+          className = oneToOneField.declaringClass().name().toString(),
+          fieldName = oneToOneField.name(),
         )
 
       associations.add(classWithField)

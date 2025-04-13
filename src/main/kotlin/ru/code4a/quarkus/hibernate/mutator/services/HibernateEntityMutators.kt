@@ -2,6 +2,7 @@ package ru.code4a.quarkus.hibernate.mutator.services
 
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
+import jakarta.persistence.OneToOne
 import kotlinx.serialization.json.Json
 import org.hibernate.Hibernate
 import ru.code4a.quarkus.hibernate.mutator.builds.FindAllHibernateAssociationsInfoBuildStep
@@ -110,7 +111,46 @@ class HibernateEntityMutators {
               }
 
           require(associationInfo.mappedBy == null)
-          require(associationInfo.mappedFrom == null)
+          require(mappedByAssociation.mappedFrom == null)
+
+          associationInfo.mappedBy = mappedByAssociation
+          mappedByAssociation.mappedFrom = associationInfo
+        }
+
+        val oneToOneAnnotation =
+          associationInfo
+            .field
+            .annotations
+            .find {
+              it is OneToOne
+            }
+            ?.let {
+              it as OneToOne
+            }
+
+        if (oneToOneAnnotation != null) {
+          val associatedClass = associationInfo.field.type
+
+          val mappedBy = oneToOneAnnotation.mappedBy
+
+          val mappedByAssociation =
+            associationsInfoMap[
+              FindAllHibernateAssociationsInfoBuildStep.ClassWithField(
+                className = associatedClass.name,
+                fieldName = mappedBy
+              )
+            ]
+              .unwrapElseError {
+                "Cannot find entity association ${
+                  FindAllHibernateAssociationsInfoBuildStep.ClassWithField(
+                    className = associatedClass.name,
+                    fieldName = mappedBy
+                  )
+                }"
+              }
+
+          require(associationInfo.mappedBy == null)
+          require(mappedByAssociation.mappedFrom == null)
 
           associationInfo.mappedBy = mappedByAssociation
           mappedByAssociation.mappedFrom = associationInfo
@@ -327,6 +367,78 @@ class HibernateEntityMutators {
 
           if (associationInfo.mappedBy != null || associationInfo.mappedFrom != null) {
             throw NotImplementedError("Not implemented ${associationInfo.clazz}::${associationInfo.field.name}.")
+          }
+
+          val field = associationInfo.field
+          field.isAccessible = true
+
+          entityRefMutators[
+            FindAllHibernateAssociationsInfoBuildStep.ClassWithField(
+              className = associationInfo.clazz.name,
+              fieldName = associationInfo.field.name
+            )
+          ] = object : HibernateEntityRefMutator {
+            override fun set(entity: Any, value: Any?) {
+              field.set(entity, value)
+            }
+          }
+
+          continue
+        }
+
+        val oneToOneAnnotation =
+          associationInfo
+            .field
+            .annotations
+            .find {
+              it is OneToOne
+            }
+            ?.let {
+              it as OneToOne
+            }
+
+        if(oneToOneAnnotation != null) {
+          val bidirectionalAssociation =
+            if(associationInfo.mappedFrom == null) {
+              associationInfo.mappedBy
+            } else {
+              associationInfo.mappedFrom
+            }
+
+          if (bidirectionalAssociation != null) {
+            val field = associationInfo.field
+            val bidirectionalField = bidirectionalAssociation.field
+
+            field.isAccessible = true
+            bidirectionalField.isAccessible = true
+
+            entityRefMutators[
+              FindAllHibernateAssociationsInfoBuildStep.ClassWithField(
+                className = associationInfo.clazz.name,
+                fieldName = associationInfo.field.name
+              )
+            ] = object : HibernateEntityRefMutator {
+              override fun set(entity: Any, value: Any?) {
+                val currentValue = field.get(entity)
+
+                if(currentValue == value) {
+                  return
+                }
+
+                if(currentValue != null) {
+                  bidirectionalField.set(currentValue, null)
+                }
+
+                if(value != null) {
+                  bidirectionalField.set(value, entity)
+                  field.set(entity, value)
+                } else {
+                  field.set(entity, null)
+                }
+              }
+            }
+
+            continue
           }
 
           val field = associationInfo.field

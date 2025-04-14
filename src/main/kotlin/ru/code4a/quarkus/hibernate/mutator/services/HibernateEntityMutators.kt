@@ -94,27 +94,29 @@ class HibernateEntityMutators {
 
           val mappedBy = oneToManyAnnotation.mappedBy
 
-          val mappedByAssociation =
-            associationsInfoMap[
-              FindAllHibernateAssociationsInfoBuildStep.ClassWithField(
-                className = associatedClass.name,
-                fieldName = mappedBy
-              )
-            ]
-              .unwrapElseError {
-                "Cannot find entity association ${
-                  FindAllHibernateAssociationsInfoBuildStep.ClassWithField(
-                    className = associatedClass.name,
-                    fieldName = mappedBy
-                  )
-                }"
-              }
+          if(mappedBy != "") {
+            val mappedByAssociation =
+              associationsInfoMap[
+                FindAllHibernateAssociationsInfoBuildStep.ClassWithField(
+                  className = associatedClass.name,
+                  fieldName = mappedBy
+                )
+              ]
+                .unwrapElseError {
+                  "Cannot find entity association ${
+                    FindAllHibernateAssociationsInfoBuildStep.ClassWithField(
+                      className = associatedClass.name,
+                      fieldName = mappedBy
+                    )
+                  }"
+                }
 
-          require(associationInfo.mappedBy == null)
-          require(mappedByAssociation.mappedFrom == null)
+            require(associationInfo.mappedBy == null)
+            require(mappedByAssociation.mappedFrom == null)
 
-          associationInfo.mappedBy = mappedByAssociation
-          mappedByAssociation.mappedFrom = associationInfo
+            associationInfo.mappedBy = mappedByAssociation
+            mappedByAssociation.mappedFrom = associationInfo
+          }
         }
 
         val oneToOneAnnotation =
@@ -133,27 +135,29 @@ class HibernateEntityMutators {
 
           val mappedBy = oneToOneAnnotation.mappedBy
 
-          val mappedByAssociation =
-            associationsInfoMap[
-              FindAllHibernateAssociationsInfoBuildStep.ClassWithField(
-                className = associatedClass.name,
-                fieldName = mappedBy
-              )
-            ]
-              .unwrapElseError {
-                "Cannot find entity association ${
-                  FindAllHibernateAssociationsInfoBuildStep.ClassWithField(
-                    className = associatedClass.name,
-                    fieldName = mappedBy
-                  )
-                }"
-              }
+          if(mappedBy != "") {
+            val mappedByAssociation =
+              associationsInfoMap[
+                FindAllHibernateAssociationsInfoBuildStep.ClassWithField(
+                  className = associatedClass.name,
+                  fieldName = mappedBy
+                )
+              ]
+                .unwrapElseError {
+                  "Cannot find entity association ${
+                    FindAllHibernateAssociationsInfoBuildStep.ClassWithField(
+                      className = associatedClass.name,
+                      fieldName = mappedBy
+                    )
+                  }"
+                }
 
-          require(associationInfo.mappedBy == null)
-          require(mappedByAssociation.mappedFrom == null)
+            require(associationInfo.mappedBy == null)
+            require(mappedByAssociation.mappedFrom == null)
 
-          associationInfo.mappedBy = mappedByAssociation
-          mappedByAssociation.mappedFrom = associationInfo
+            associationInfo.mappedBy = mappedByAssociation
+            mappedByAssociation.mappedFrom = associationInfo
+          }
         }
       }
 

@@ -10,6 +10,7 @@ import ru.code4a.quarkus.hibernate.mutator.mutators.HibernateEntityCollectionMut
 import ru.code4a.quarkus.hibernate.mutator.mutators.HibernateEntityRefMutator
 import ru.code4a.quarkus.hibernate.mutator.utils.nullable.unwrapElseError
 import java.lang.reflect.Field
+import java.lang.reflect.Method
 import kotlin.reflect.jvm.jvmErasure
 import kotlin.reflect.jvm.kotlinProperty
 
@@ -162,6 +163,8 @@ class HibernateEntityMutators {
       }
 
       for (associationInfo in associationsInfoMap.values) {
+        val trackChangeMethod = associationInfo.clazz.getTrackChangeMethod()
+
         val oneToManyAnnotation =
           associationInfo
             .field
@@ -189,6 +192,13 @@ class HibernateEntityMutators {
 
             val field = associationInfo.field
             val mappedByField = mappedByAssociation.field
+            val mappedByFieldName = mappedByField.name
+            val mappedByAssociationTrackChangeMethod = mappedByAssociation.clazz.getTrackChangeMethod()
+
+            val mappedByFieldSetter = { obj: Any, value: Any? ->
+              mappedByAssociationTrackChangeMethod.invoke(obj, mappedByFieldName)
+              mappedByField.set(obj, value)
+            }
 
             field.isAccessible = true
             mappedByField.isAccessible = true
@@ -207,7 +217,7 @@ class HibernateEntityMutators {
                   // Find elements to remove (those in current collection but not in new values)
                   val elementsToRemove = entityElements.filter { it !in newValues }
                   for (elementToRemove in elementsToRemove) {
-                    mappedByField.set(elementToRemove, null)
+                    mappedByFieldSetter.invoke(elementToRemove, null)
                   }
 
                   // Find elements to add (those in new values but not in current collection)
@@ -216,7 +226,7 @@ class HibernateEntityMutators {
                     if (mappedByField.get(elementToAdd) != null) {
                       throw IllegalStateException("Entity already associated with another entity")
                     }
-                    mappedByField.set(elementToAdd, entity)
+                    mappedByFieldSetter.invoke(elementToAdd, entity)
                   }
 
                   // Update the collection in one go
@@ -231,7 +241,7 @@ class HibernateEntityMutators {
                 override fun remove(entity: Any, value: Any) {
                   if (mappedByField.get(value) == entity) {
                     val entityElements = field.get(entity) as MutableSet<Any>
-                    mappedByField.set(value, null)
+                    mappedByFieldSetter.invoke(value, null)
                     entityElements.remove(value)
                   } else {
                     throw IllegalStateException("Entity associated with another entity")
@@ -247,7 +257,7 @@ class HibernateEntityMutators {
 
                   val entityElements = field.get(entity) as MutableSet<Any>
 
-                  mappedByField.set(value, entity)
+                  mappedByFieldSetter.invoke(value, entity)
                   entityElements.add(value)
                 }
               }
@@ -326,9 +336,15 @@ class HibernateEntityMutators {
             if (mappedFromFieldClass == Set::class.java) {
               val field = associationInfo.field
               field.isAccessible = true
+              val fieldName = field.name
 
               val mappedFromField = mappedFromAssociation.field
               mappedFromField.isAccessible = true
+
+              val fieldSetter = { obj: Any, value: Any? ->
+                trackChangeMethod.invoke(obj, fieldName)
+                field.set(obj, value)
+              }
 
               entityRefMutators[
                 FindAllHibernateAssociationsInfoBuildStep.ClassWithField(
@@ -352,13 +368,13 @@ class HibernateEntityMutators {
                   }
 
                   if (value == null) {
-                    field.set(entity, null)
+                    fieldSetter.invoke(entity, null)
                   } else {
                     if (collectionIsInitialized) {
                       mappedFromCollection.add(entity)
                     }
 
-                    field.set(entity, value)
+                    fieldSetter.invoke(entity, value)
                   }
                 }
               }
@@ -375,6 +391,12 @@ class HibernateEntityMutators {
 
           val field = associationInfo.field
           field.isAccessible = true
+          val fieldName = field.name
+
+          val fieldSetter = { obj: Any, value: Any? ->
+            trackChangeMethod.invoke(obj, fieldName)
+            field.set(obj, value)
+          }
 
           entityRefMutators[
             FindAllHibernateAssociationsInfoBuildStep.ClassWithField(
@@ -383,7 +405,7 @@ class HibernateEntityMutators {
             )
           ] = object : HibernateEntityRefMutator {
             override fun set(entity: Any, value: Any?) {
-              field.set(entity, value)
+              fieldSetter.invoke(entity, value)
             }
           }
 
@@ -411,7 +433,21 @@ class HibernateEntityMutators {
 
           if (bidirectionalAssociation != null) {
             val field = associationInfo.field
+            val fieldName = field.name
+
             val bidirectionalField = bidirectionalAssociation.field
+            val bidirectionalFieldName = bidirectionalField.name
+            val bidirectionalHibernateTrackChangeMethod = bidirectionalAssociation.clazz.getTrackChangeMethod()
+
+            val fieldSetter = { obj: Any, value: Any? ->
+              trackChangeMethod.invoke(obj, fieldName)
+              field.set(obj, value)
+            }
+
+            val bidirectionalFieldSetter = { obj: Any, value: Any? ->
+              bidirectionalHibernateTrackChangeMethod.invoke(obj, bidirectionalFieldName)
+              bidirectionalField.set(obj, value)
+            }
 
             field.isAccessible = true
             bidirectionalField.isAccessible = true
@@ -430,14 +466,14 @@ class HibernateEntityMutators {
                 }
 
                 if(currentValue != null) {
-                  bidirectionalField.set(currentValue, null)
+                  bidirectionalFieldSetter.invoke(currentValue, null)
                 }
 
                 if(value != null) {
-                  bidirectionalField.set(value, entity)
-                  field.set(entity, value)
+                  bidirectionalFieldSetter.invoke(value, entity)
+                  fieldSetter.invoke(entity, value)
                 } else {
-                  field.set(entity, null)
+                  fieldSetter.invoke(entity, null)
                 }
               }
             }
@@ -447,6 +483,12 @@ class HibernateEntityMutators {
 
           val field = associationInfo.field
           field.isAccessible = true
+          val fieldName = field.name
+
+          val fieldSetter = { obj: Any, value: Any? ->
+            trackChangeMethod.invoke(obj, fieldName)
+            field.set(obj, value)
+          }
 
           entityRefMutators[
             FindAllHibernateAssociationsInfoBuildStep.ClassWithField(
@@ -455,7 +497,7 @@ class HibernateEntityMutators {
             )
           ] = object : HibernateEntityRefMutator {
             override fun set(entity: Any, value: Any?) {
-              field.set(entity, value)
+              fieldSetter.invoke(entity, value)
             }
           }
 
@@ -469,4 +511,8 @@ class HibernateEntityMutators {
       this.entityRefMutators = entityRefMutators
     }
   }
+}
+
+private fun Class<*>.getTrackChangeMethod(): Method {
+  return getDeclaredMethod("\$\$_hibernate_trackChange")
 }

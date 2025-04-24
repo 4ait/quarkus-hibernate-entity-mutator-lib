@@ -5,6 +5,7 @@ import jakarta.persistence.OneToMany
 import jakarta.persistence.OneToOne
 import kotlinx.serialization.json.Json
 import org.hibernate.Hibernate
+import org.hibernate.bytecode.enhance.internal.tracker.SimpleFieldTracker
 import ru.code4a.quarkus.hibernate.mutator.builds.FindAllHibernateAssociationsInfoBuildStep
 import ru.code4a.quarkus.hibernate.mutator.mutators.HibernateEntityCollectionMutator
 import ru.code4a.quarkus.hibernate.mutator.mutators.HibernateEntityRefMutator
@@ -513,6 +514,25 @@ class HibernateEntityMutators {
   }
 }
 
-private fun Class<*>.getTrackChangeMethod(): Method {
-  return getDeclaredMethod("\$\$_hibernate_trackChange")
+private fun Class<*>.getTrackChangeMethod(): (Any, String) -> Unit {
+  val trackerField = declaredFields.find { it.name == "\$\$_hibernate_tracker" }!!
+
+  trackerField.isAccessible = true
+
+   return { obj: Any, fieldName: String ->
+     val trackerFieldValue =
+       trackerField.get(obj).let { trackerFieldValue ->
+         if(trackerFieldValue == null) {
+           val newTrackerFieldValue = SimpleFieldTracker()
+
+           trackerField.set(obj, newTrackerFieldValue)
+
+           newTrackerFieldValue
+         } else {
+           trackerFieldValue as SimpleFieldTracker
+         }
+       }
+
+     trackerFieldValue.add(fieldName)
+  }
 }

@@ -2,25 +2,33 @@ package ru.code4a.quarkus.hibernate.mutator.builds
 
 import io.quarkus.deployment.annotations.BuildProducer
 import io.quarkus.deployment.annotations.BuildStep
+import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
 import jakarta.persistence.OneToOne
+import jakarta.ws.rs.Consumes
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import org.objectweb.asm.ClassReader
+import org.objectweb.asm.Opcodes
+import ru.code4a.quarkus.hibernate.mutator.bytebuddy.ConstructorMethodTransformer
+import ru.code4a.quarkus.hibernate.mutator.bytebuddy.EntityFieldAccessTransformer
+import java.util.function.BiFunction
 
 class FindAllHibernateAssociationsInfoBuildStep {
   @Serializable
-  data class ClassWithField(
+  data class ClassNameWithFieldName(
     val className: String,
     val fieldName: String,
   )
 
   @BuildStep
-  fun transformCameraEntity(
+  fun transformEntities(
     combinedIndex: CombinedIndexBuildItem,
-    resourceProducer: BuildProducer<GeneratedResourceBuildItem>
+    resourceProducer: BuildProducer<GeneratedResourceBuildItem>,
+    bytecodeTransformerProducer: BuildProducer<BytecodeTransformerBuildItem>,
   ) {
     val oneToManyFieldsMap =
       combinedIndex
@@ -32,7 +40,7 @@ class FindAllHibernateAssociationsInfoBuildStep {
         .map {
           it.target().asField()
         }
-        .associateBy { ClassWithField(it.declaringClass().name().toString(), it.name()) }
+        .associateBy { ClassNameWithFieldName(it.declaringClass().name().toString(), it.name()) }
 
     val manyToOneFieldsMap =
       combinedIndex
@@ -44,7 +52,7 @@ class FindAllHibernateAssociationsInfoBuildStep {
         .map {
           it.target().asField()
         }
-        .associateBy { ClassWithField(it.declaringClass().name().toString(), it.name()) }
+        .associateBy { ClassNameWithFieldName(it.declaringClass().name().toString(), it.name()) }
 
     val oneToOneFieldsMap =
       combinedIndex
@@ -56,38 +64,38 @@ class FindAllHibernateAssociationsInfoBuildStep {
         .map {
           it.target().asField()
         }
-        .associateBy { ClassWithField(it.declaringClass().name().toString(), it.name()) }
+        .associateBy { ClassNameWithFieldName(it.declaringClass().name().toString(), it.name()) }
 
-    val associations = mutableListOf<ClassWithField>()
+    val associations = mutableListOf<ClassNameWithFieldName>()
 
     for (oneToManyField in oneToManyFieldsMap.values) {
-      val classWithField =
-        ClassWithField(
+      val classNameWithFieldName =
+        ClassNameWithFieldName(
           className = oneToManyField.declaringClass().name().toString(),
           fieldName = oneToManyField.name(),
         )
 
-      associations.add(classWithField)
+      associations.add(classNameWithFieldName)
     }
 
     for (manyToOneField in manyToOneFieldsMap.values) {
-      val classWithField =
-        ClassWithField(
+      val classNameWithFieldName =
+        ClassNameWithFieldName(
           className = manyToOneField.declaringClass().name().toString(),
           fieldName = manyToOneField.name(),
         )
 
-      associations.add(classWithField)
+      associations.add(classNameWithFieldName)
     }
 
     for (oneToOneField in oneToOneFieldsMap.values) {
-      val classWithField =
-        ClassWithField(
+      val classNameWithFieldName =
+        ClassNameWithFieldName(
           className = oneToOneField.declaringClass().name().toString(),
           fieldName = oneToOneField.name(),
         )
 
-      associations.add(classWithField)
+      associations.add(classNameWithFieldName)
     }
 
     resourceProducer.produce(
@@ -96,5 +104,55 @@ class FindAllHibernateAssociationsInfoBuildStep {
         Json.encodeToString(associations).toByteArray()
       )
     )
+
+    val entityClassesWithMethods = associations.groupBy { it.className }
+
+    for (entityClassWithMethods in entityClassesWithMethods) {
+      val entityClassName = entityClassWithMethods.key
+
+      bytecodeTransformerProducer.produce(
+        BytecodeTransformerBuildItem.Builder()
+          .setPriority(Int.MAX_VALUE)
+          .setClassToTransform(entityClassName)
+          .setVisitorFunction { _, visitor ->
+            EntityFieldAccessTransformer(
+              api = Opcodes.ASM9,
+              visitor = visitor,
+              entityClassName = entityClassName,
+              entityJpaFields = entityClassWithMethods.value.map { it.fieldName }.toSet()
+            )
+          }
+          .build()
+      )
+
+      bytecodeTransformerProducer.produce(
+        BytecodeTransformerBuildItem.Builder()
+          .setPriority(Int.MAX_VALUE)
+          .setClassToTransform("${entityClassName}\$Companion")
+          .setVisitorFunction { _, visitor ->
+            EntityFieldAccessTransformer(
+              api = Opcodes.ASM9,
+              visitor = visitor,
+              entityClassName = entityClassName,
+              entityJpaFields = entityClassWithMethods.value.map { it.fieldName }.toSet()
+            )
+          }
+          .build()
+      )
+
+      bytecodeTransformerProducer.produce(
+        BytecodeTransformerBuildItem.Builder()
+          .setClassToTransform(entityClassName)
+          .setClassReaderOptions(ClassReader.EXPAND_FRAMES)
+          .setVisitorFunction { _, visitor ->
+            ConstructorMethodTransformer(
+              api = Opcodes.ASM9,
+              visitor = visitor,
+              className = entityClassName
+            )
+          }
+          .build()
+      )
+    }
   }
 }

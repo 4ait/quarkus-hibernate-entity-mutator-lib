@@ -1,5 +1,6 @@
 package ru.code4a.quarkus.hibernate.mutator.services
 
+import jakarta.persistence.ManyToMany
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
 import jakarta.persistence.OneToOne
@@ -13,8 +14,6 @@ import ru.code4a.quarkus.hibernate.mutator.mutators.interfaces.HibernateEntityCo
 import ru.code4a.quarkus.hibernate.mutator.mutators.interfaces.HibernateEntityRefMutator
 import ru.code4a.quarkus.hibernate.mutator.utils.nullable.unwrapElseError
 import java.lang.reflect.Field
-import kotlin.reflect.KMutableProperty
-import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.jvmErasure
 import kotlin.reflect.jvm.kotlinProperty
 
@@ -65,10 +64,6 @@ object HibernateEntityMutators {
         val clazz = classLoader.loadClass(associationRawInfo.className)
         val field = clazz.declaredFields.first { associationRawInfo.fieldName == it.name }
 
-        if (field.kotlinProperty!! is KMutableProperty<*>) {
-          errors.add("Property ${field.kotlinProperty} must be non mutable")
-        }
-
         AssociationInfo(
           clazz = clazz,
           field = field
@@ -80,10 +75,6 @@ object HibernateEntityMutators {
             fieldName = it.field.name
           )
         }
-
-    if (errors.isNotEmpty()) {
-      //error(errors.joinToString("\n"))
-    }
 
     for (associationInfo in associationsInfoMap.values) {
       val oneToManyAnnotation =
@@ -182,10 +173,114 @@ object HibernateEntityMutators {
           mappedByAssociation.mappedFrom = associationInfo
         }
       }
+
+      val manyToManyAnnotation =
+        associationInfo
+          .field
+          .annotations
+          .find {
+            it is ManyToMany
+          }
+          ?.let {
+            it as ManyToMany
+          }
+
+      if (manyToManyAnnotation != null) {
+        if (manyToManyAnnotation.mappedBy.isNotBlank()) {
+          error("ManyToMany mappedBy is not supported yet")
+        }
+      }
     }
 
     for (associationInfo in associationsInfoMap.values) {
       val trackChangeMethod = associationInfo.clazz.getTrackChangeMethod()
+
+      val manyToManyAnnotation =
+        associationInfo
+          .field
+          .annotations
+          .find {
+            it is ManyToMany
+          }
+          ?.let {
+            it as ManyToMany
+          }
+
+      if (manyToManyAnnotation != null) {
+        val mappedByAssociation = associationInfo.mappedBy
+        if (mappedByAssociation != null) {
+          error("ManyToMany mappedBy is not supported yet")
+        }
+
+        if (associationInfo.mappedBy != null || associationInfo.mappedFrom != null) {
+          throw NotImplementedError("Not implemented ${associationInfo.clazz}::${associationInfo.field.name}.")
+        }
+
+        val field = associationInfo.field
+        field.isAccessible = true
+
+        val fieldClass =
+          associationInfo
+            .field
+            .type
+
+        if (fieldClass == Set::class.java) {
+          val mutator =
+            object : HibernateEntityCollectionMutator {
+              override fun set(entity: Any, values: Collection<Any>) {
+                val entityElements = field.get(entity) as? MutableSet<Any> ?: run {
+                  /**
+                   * This happens if compiler did some optimization on creation object
+                   */
+                  val newEntityElements = mutableSetOf<Any>()
+                  field.set(entity, newEntityElements)
+                  newEntityElements
+                }
+
+                entityElements.clear()
+                entityElements.addAll(values)
+              }
+
+              override fun beforeSetManual(entity: Any, values: Collection<Any>) {}
+              override fun rawSet(entity: Any, values: Collection<Any>) {
+                field.set(entity, values)
+              }
+
+              override fun remove(entity: Any, value: Any) {
+                val entityElements = field.get(entity) as MutableSet<Any>
+
+                entityElements.remove(value)
+              }
+
+              override fun add(entity: Any, value: Any) {
+                val entityElements = field.get(entity) as MutableSet<Any>
+
+                entityElements.add(value)
+              }
+            }
+
+          entityCollectionMutators[
+            FindAllHibernateAssociationsInfoBuildStep.ClassNameWithFieldName(
+              className = associationInfo.clazz.name,
+              fieldName = associationInfo.field.name
+            )
+          ] = mutator
+
+          entityFieldStateInitializers[
+            ClassWithFieldName(
+              clazz = associationInfo.clazz,
+              fieldName = associationInfo.field.name
+            )
+          ] = object : EntityFieldStateInitializer {
+            override fun initialize(entity: Any) {}
+          }
+          continue
+        } else {
+          throw NotImplementedError("Mapped by with type $fieldClass is not implemented.")
+        }
+
+        throw NotImplementedError("Not implemented ${associationInfo.clazz}::${associationInfo.field.name}.")
+      }
 
       val oneToManyAnnotation =
         associationInfo
@@ -221,8 +316,6 @@ object HibernateEntityMutators {
             mappedByAssociationTrackChangeMethod.invoke(obj, mappedByFieldName)
             mappedByField.set(obj, value)
           }
-
-          val fieldName = field.name
 
           field.isAccessible = true
           mappedByField.isAccessible = true

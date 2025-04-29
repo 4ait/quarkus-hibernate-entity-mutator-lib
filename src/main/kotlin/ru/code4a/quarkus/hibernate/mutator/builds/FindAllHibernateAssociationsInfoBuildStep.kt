@@ -5,6 +5,7 @@ import io.quarkus.deployment.annotations.BuildStep
 import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem
+import jakarta.persistence.ManyToMany
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
 import jakarta.persistence.OneToOne
@@ -60,6 +61,18 @@ class FindAllHibernateAssociationsInfoBuildStep {
         }
         .associateBy { ClassNameWithFieldName(it.declaringClass().name().toString(), it.name()) }
 
+    val manyToManyFieldsMap =
+      combinedIndex
+        .index
+        .getAnnotations(ManyToMany::class.java)
+        .filter {
+          it.target().kind() == org.jboss.jandex.AnnotationTarget.Kind.FIELD
+        }
+        .map {
+          it.target().asField()
+        }
+        .associateBy { ClassNameWithFieldName(it.declaringClass().name().toString(), it.name()) }
+
     val associations = mutableListOf<ClassNameWithFieldName>()
 
     for (oneToManyField in oneToManyFieldsMap.values) {
@@ -87,6 +100,16 @@ class FindAllHibernateAssociationsInfoBuildStep {
         ClassNameWithFieldName(
           className = oneToOneField.declaringClass().name().toString(),
           fieldName = oneToOneField.name(),
+        )
+
+      associations.add(classNameWithFieldName)
+    }
+
+    for (manyToManyField in manyToManyFieldsMap.values) {
+      val classNameWithFieldName =
+        ClassNameWithFieldName(
+          className = manyToManyField.declaringClass().name().toString(),
+          fieldName = manyToManyField.name(),
         )
 
       associations.add(classNameWithFieldName)

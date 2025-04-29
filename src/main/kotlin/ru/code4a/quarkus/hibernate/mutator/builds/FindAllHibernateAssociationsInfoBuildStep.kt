@@ -8,14 +8,8 @@ import io.quarkus.deployment.builditem.GeneratedResourceBuildItem
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
 import jakarta.persistence.OneToOne
-import jakarta.ws.rs.Consumes
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import org.objectweb.asm.ClassReader
-import org.objectweb.asm.Opcodes
-import ru.code4a.quarkus.hibernate.mutator.bytebuddy.ConstructorMethodTransformer
-import ru.code4a.quarkus.hibernate.mutator.bytebuddy.EntityFieldAccessTransformer
-import java.util.function.BiFunction
 
 class FindAllHibernateAssociationsInfoBuildStep {
   @Serializable
@@ -104,55 +98,5 @@ class FindAllHibernateAssociationsInfoBuildStep {
         Json.encodeToString(associations).toByteArray()
       )
     )
-
-    val entityClassesWithMethods = associations.groupBy { it.className }
-
-    for (entityClassWithMethods in entityClassesWithMethods) {
-      val entityClassName = entityClassWithMethods.key
-
-      bytecodeTransformerProducer.produce(
-        BytecodeTransformerBuildItem.Builder()
-          .setPriority(Int.MAX_VALUE)
-          .setClassToTransform(entityClassName)
-          .setVisitorFunction { _, visitor ->
-            EntityFieldAccessTransformer(
-              api = Opcodes.ASM9,
-              visitor = visitor,
-              entityClassName = entityClassName,
-              entityJpaFields = entityClassWithMethods.value.map { it.fieldName }.toSet()
-            )
-          }
-          .build()
-      )
-
-      bytecodeTransformerProducer.produce(
-        BytecodeTransformerBuildItem.Builder()
-          .setPriority(Int.MAX_VALUE)
-          .setClassToTransform("${entityClassName}\$Companion")
-          .setVisitorFunction { _, visitor ->
-            EntityFieldAccessTransformer(
-              api = Opcodes.ASM9,
-              visitor = visitor,
-              entityClassName = entityClassName,
-              entityJpaFields = entityClassWithMethods.value.map { it.fieldName }.toSet()
-            )
-          }
-          .build()
-      )
-
-      bytecodeTransformerProducer.produce(
-        BytecodeTransformerBuildItem.Builder()
-          .setClassToTransform(entityClassName)
-          .setClassReaderOptions(ClassReader.EXPAND_FRAMES)
-          .setVisitorFunction { _, visitor ->
-            ConstructorMethodTransformer(
-              api = Opcodes.ASM9,
-              visitor = visitor,
-              className = entityClassName
-            )
-          }
-          .build()
-      )
-    }
   }
 }

@@ -7,7 +7,6 @@ import ru.code4a.quarkus.hibernate.mutator.services.HibernateEntityMutators.enti
 import ru.code4a.quarkus.hibernate.mutator.utils.nullable.unwrapElseError
 
 object HibernateEntityMutatorProcessor {
-  @JvmStatic
   fun processBeforeSet(entity: Any, fieldName: String, value: Any?) {
     val currentClassNameWithFieldName =
       FindAllHibernateAssociationsInfoBuildStep.ClassNameWithFieldName(
@@ -24,7 +23,6 @@ object HibernateEntityMutatorProcessor {
     entityMutator.beforeSetManual(entity, value)
   }
 
-  @JvmStatic
   fun processSetCollection(entity: Any, fieldName: String, values: Collection<Any>) {
     val currentClassNameWithFieldName =
       FindAllHibernateAssociationsInfoBuildStep.ClassNameWithFieldName(
@@ -41,7 +39,6 @@ object HibernateEntityMutatorProcessor {
     entityMutator.set(entity, values)
   }
 
-  @JvmStatic
   fun processRawSetCollection(entity: Any, fieldName: String, values: Collection<Any>) {
     val currentClassNameWithFieldName =
       FindAllHibernateAssociationsInfoBuildStep.ClassNameWithFieldName(
@@ -58,13 +55,19 @@ object HibernateEntityMutatorProcessor {
     entityMutator.rawSet(entity, values)
   }
 
-  @JvmStatic
   fun initializeEntity(entity: Any) {
     val entityInitializer =
       entityInitializers[entity::class.java]
         .unwrapElseError {
           "Cannot find initializer for ${entity::class.java}"
         }
+
+    entityInitializer.initialize(entity)
+  }
+
+  fun initializeEntityIfInitializerPresent(entity: Any) {
+    val entityInitializer =
+      entityInitializers[entity::class.java] ?: return
 
     entityInitializer.initialize(entity)
   }

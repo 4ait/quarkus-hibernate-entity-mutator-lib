@@ -228,14 +228,7 @@ object HibernateEntityMutators {
           val mutator =
             object : HibernateEntityCollectionMutator {
               override fun set(entity: Any, values: Collection<Any>) {
-                val entityElements = field.get(entity) as? MutableSet<Any> ?: run {
-                  /**
-                   * This happens if compiler did some optimization on creation object
-                   */
-                  val newEntityElements = mutableSetOf<Any>()
-                  field.set(entity, newEntityElements)
-                  newEntityElements
-                }
+                val entityElements = field.get(entity) as MutableSet<Any>
 
                 entityElements.clear()
                 entityElements.addAll(values)
@@ -336,14 +329,7 @@ object HibernateEntityMutators {
 
             val preprocessAndSetWithFieldSetter =
               { fieldSetter: (entity: Any, elementsToAdd: List<Any>, elementsToRemove: List<Any>) -> Unit, entity: Any, values: Collection<Any> ->
-                val entityElements = field.get(entity) as? MutableSet<Any> ?: run {
-                  /**
-                   * This happens if compiler did some optimization on creation object
-                   */
-                  val newEntityElements = mutableSetOf<Any>()
-                  field.set(entity, newEntityElements)
-                  newEntityElements
-                }
+                val entityElements = field.get(entity) as MutableSet<Any>
 
                 val newValues = values.toSet() // Convert to Set for better performance in contains() operations
 
@@ -421,7 +407,7 @@ object HibernateEntityMutators {
             ] = object : EntityFieldStateInitializer {
               override fun initialize(entity: Any) {
                 // This happens if kotlin generate constructor with empty params
-                val collection = field.get(entity) as? MutableSet<Any> ?: return
+                val collection = field.get(entity) as MutableSet<Any>
 
                 if (collection.isNotEmpty()) {
                   field.set(entity, mutableSetOf<Any>())
@@ -452,14 +438,7 @@ object HibernateEntityMutators {
           val mutator =
             object : HibernateEntityCollectionMutator {
               override fun set(entity: Any, values: Collection<Any>) {
-                val entityElements = field.get(entity) as? MutableSet<Any> ?: run {
-                  /**
-                   * This happens if compiler did some optimization on creation object
-                   */
-                  val newEntityElements = mutableSetOf<Any>()
-                  field.set(entity, newEntityElements)
-                  newEntityElements
-                }
+                val entityElements = field.get(entity) as MutableSet<Any>
 
                 entityElements.clear()
                 entityElements.addAll(values)

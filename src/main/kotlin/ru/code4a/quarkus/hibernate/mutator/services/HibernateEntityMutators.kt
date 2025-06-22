@@ -225,14 +225,18 @@ object HibernateEntityMutators {
             .type
 
         if (fieldClass == Set::class.java) {
+          val fieldGetter = { entity: Any ->
+            if (!Hibernate.isInitialized(entity)) {
+              Hibernate.initialize(entity)
+            }
+
+            field.get(entity)
+          }
+
           val mutator =
             object : HibernateEntityCollectionMutator {
               override fun set(entity: Any, values: Collection<Any>) {
-                if (!Hibernate.isInitialized(entity)) {
-                  Hibernate.initialize(entity)
-                }
-
-                val entityElements = field.get(entity) as MutableSet<Any>
+                val entityElements = fieldGetter.invoke(entity) as MutableSet<Any>
 
                 entityElements.clear()
                 entityElements.addAll(values)
@@ -248,21 +252,13 @@ object HibernateEntityMutators {
               }
 
               override fun remove(entity: Any, value: Any) {
-                if (!Hibernate.isInitialized(entity)) {
-                  Hibernate.initialize(entity)
-                }
-
-                val entityElements = field.get(entity) as MutableSet<Any>
+                val entityElements = fieldGetter(entity) as MutableSet<Any>
 
                 entityElements.remove(value)
               }
 
               override fun add(entity: Any, value: Any) {
-                if (!Hibernate.isInitialized(entity)) {
-                  Hibernate.initialize(entity)
-                }
-
-                val entityElements = field.get(entity) as MutableSet<Any>
+                val entityElements = fieldGetter.invoke(entity) as MutableSet<Any>
 
                 entityElements.add(value)
               }

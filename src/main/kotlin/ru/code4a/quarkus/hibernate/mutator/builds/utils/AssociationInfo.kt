@@ -4,8 +4,8 @@ import jakarta.persistence.ManyToMany
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
 import jakarta.persistence.OneToOne
-import ru.code4a.quarkus.hibernate.mutator.builds.FindAllHibernateAssociationsInfoBuildStep
-import ru.code4a.quarkus.hibernate.mutator.services.HibernateEntityMutators
+import ru.code4a.quarkus.hibernate.mutator.models.ClassNameWithFieldName
+import ru.code4a.quarkus.hibernate.mutator.models.ClassWithFieldName
 import ru.code4a.quarkus.hibernate.mutator.utils.nullable.unwrapElseError
 import java.lang.reflect.Field
 import kotlin.reflect.jvm.jvmErasure
@@ -27,14 +27,14 @@ internal data class AssociationInfo(
   val key: AssociationKey
     get() = AssociationKey(clazz.name, this.field.name)
 
-  val buildItemKey: FindAllHibernateAssociationsInfoBuildStep.ClassNameWithFieldName
-    get() = FindAllHibernateAssociationsInfoBuildStep.ClassNameWithFieldName(
+  val classNameWithFieldName: ClassNameWithFieldName
+    get() = ClassNameWithFieldName(
       className = clazz.name,
       fieldName = this.field.name
     )
 
-  val classWithFieldName: HibernateEntityMutators.ClassWithFieldName
-    get() = HibernateEntityMutators.ClassWithFieldName(
+  val classWithFieldName: ClassWithFieldName
+    get() = ClassWithFieldName(
       clazz = clazz,
       fieldName = this.field.name
     )

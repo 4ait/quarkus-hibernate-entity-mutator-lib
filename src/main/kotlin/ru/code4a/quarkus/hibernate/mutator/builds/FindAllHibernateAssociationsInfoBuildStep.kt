@@ -2,32 +2,24 @@ package ru.code4a.quarkus.hibernate.mutator.builds
 
 import io.quarkus.deployment.annotations.BuildProducer
 import io.quarkus.deployment.annotations.BuildStep
-import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem
 import jakarta.persistence.ManyToMany
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
 import jakarta.persistence.OneToOne
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import ru.code4a.quarkus.hibernate.mutator.models.ClassNameWithFieldName
 
 class FindAllHibernateAssociationsInfoBuildStep {
   companion object {
     const val ASSOCIATIONS_JSON_RESOURCE_PATH = "ru/code4a/hibernate/gen/associations"
   }
 
-  @Serializable
-  data class ClassNameWithFieldName(
-    val className: String,
-    val fieldName: String,
-  )
-
   @BuildStep
   fun transformEntities(
     combinedIndex: CombinedIndexBuildItem,
-    resourceProducer: BuildProducer<GeneratedResourceBuildItem>,
-    bytecodeTransformerProducer: BuildProducer<BytecodeTransformerBuildItem>,
+    resourceProducer: BuildProducer<GeneratedResourceBuildItem>
   ) {
     val oneToManyFieldsMap =
       combinedIndex

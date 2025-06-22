@@ -1,7 +1,7 @@
 import kotlinx.serialization.json.Json
-import ru.code4a.quarkus.hibernate.mutator.builds.FindAllHibernateAssociationsInfoBuildStep
 import ru.code4a.quarkus.hibernate.mutator.builds.FindAllHibernateAssociationsInfoBuildStep.Companion.ASSOCIATIONS_JSON_RESOURCE_PATH
 import ru.code4a.quarkus.hibernate.mutator.builds.utils.AssociationInfo
+import ru.code4a.quarkus.hibernate.mutator.models.ClassNameWithFieldName
 import ru.code4a.quarkus.hibernate.mutator.utils.nullable.unwrapElseError
 
 /**
@@ -17,7 +17,7 @@ internal class AssociationsLoader {
       .unwrapElseError { "Cannot find resource $resourcePath" }
       .readText()
 
-    val rawAssociations: List<FindAllHibernateAssociationsInfoBuildStep.ClassNameWithFieldName> =
+    val rawAssociations: List<ClassNameWithFieldName> =
       Json.decodeFromString(resourceContent)
 
     return rawAssociations.map { raw ->

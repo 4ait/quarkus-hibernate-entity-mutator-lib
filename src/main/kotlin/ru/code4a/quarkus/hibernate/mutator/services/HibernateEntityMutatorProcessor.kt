@@ -1,15 +1,14 @@
 package ru.code4a.quarkus.hibernate.mutator.services
 
-import ru.code4a.quarkus.hibernate.mutator.builds.FindAllHibernateAssociationsInfoBuildStep
+import ru.code4a.quarkus.hibernate.mutator.models.ClassNameWithFieldName
 import ru.code4a.quarkus.hibernate.mutator.services.HibernateEntityMutators.entityCollectionMutators
 import ru.code4a.quarkus.hibernate.mutator.services.HibernateEntityMutators.entityInitializers
-import ru.code4a.quarkus.hibernate.mutator.services.HibernateEntityMutators.entityRefMutators
 import ru.code4a.quarkus.hibernate.mutator.utils.nullable.unwrapElseError
 
 object HibernateEntityMutatorProcessor {
   fun processSetCollection(entity: Any, fieldName: String, values: Collection<Any>) {
     val currentClassNameWithFieldName =
-      FindAllHibernateAssociationsInfoBuildStep.ClassNameWithFieldName(
+      ClassNameWithFieldName(
         className = entity::class.java.name,
         fieldName = fieldName
       )
@@ -25,7 +24,7 @@ object HibernateEntityMutatorProcessor {
 
   fun processRawSetCollection(entity: Any, fieldName: String, values: Collection<Any>) {
     val currentClassNameWithFieldName =
-      FindAllHibernateAssociationsInfoBuildStep.ClassNameWithFieldName(
+      ClassNameWithFieldName(
         className = entity::class.java.name,
         fieldName = fieldName
       )

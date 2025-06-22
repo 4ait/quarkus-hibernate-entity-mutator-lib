@@ -1,9 +1,10 @@
 package ru.code4a.quarkus.hibernate.mutator.services
 
 import AssociationsLoader
-import ru.code4a.quarkus.hibernate.mutator.builds.FindAllHibernateAssociationsInfoBuildStep
 import ru.code4a.quarkus.hibernate.mutator.interfaces.EntityFieldStateInitializer
 import ru.code4a.quarkus.hibernate.mutator.interfaces.EntityStateInitializer
+import ru.code4a.quarkus.hibernate.mutator.models.ClassNameWithFieldName
+import ru.code4a.quarkus.hibernate.mutator.models.ClassWithFieldName
 import ru.code4a.quarkus.hibernate.mutator.mutators.interfaces.HibernateEntityCollectionMutator
 import ru.code4a.quarkus.hibernate.mutator.mutators.interfaces.HibernateEntityRefMutator
 import ru.code4a.quarkus.hibernate.mutator.services.mutators.build.AssociationProcessor
@@ -14,8 +15,8 @@ import ru.code4a.quarkus.hibernate.mutator.services.mutators.build.MutatorFactor
  * Processes JPA associations and creates appropriate mutators for entity relationships.
  */
 object HibernateEntityMutators {
-  val entityCollectionMutators: Map<FindAllHibernateAssociationsInfoBuildStep.ClassNameWithFieldName, HibernateEntityCollectionMutator>
-  val entityRefMutators: Map<FindAllHibernateAssociationsInfoBuildStep.ClassNameWithFieldName, HibernateEntityRefMutator>
+  val entityCollectionMutators: Map<ClassNameWithFieldName, HibernateEntityCollectionMutator>
+  val entityRefMutators: Map<ClassNameWithFieldName, HibernateEntityRefMutator>
   val entityInitializers: Map<Class<*>, EntityStateInitializer>
 
   init {
@@ -43,9 +44,4 @@ object HibernateEntityMutators {
         EntityStateInitializer(entries.map { it.value })
       }
   }
-
-  data class ClassWithFieldName(
-    val clazz: Class<*>,
-    val fieldName: String
-  )
 }

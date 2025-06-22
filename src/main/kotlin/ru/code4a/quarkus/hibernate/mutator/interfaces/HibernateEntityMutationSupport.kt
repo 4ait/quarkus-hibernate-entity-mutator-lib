@@ -1,8 +1,8 @@
 package ru.code4a.quarkus.hibernate.mutator.interfaces
 
-import ru.code4a.quarkus.hibernate.mutator.builds.FindAllHibernateAssociationsInfoBuildStep
-import ru.code4a.quarkus.hibernate.mutator.mutators.wrappers.HibernateRefMutator
+import ru.code4a.quarkus.hibernate.mutator.models.ClassNameWithFieldName
 import ru.code4a.quarkus.hibernate.mutator.mutators.wrappers.HibernateCollectionMutator
+import ru.code4a.quarkus.hibernate.mutator.mutators.wrappers.HibernateRefMutator
 import ru.code4a.quarkus.hibernate.mutator.services.HibernateEntityMutators
 import ru.code4a.quarkus.hibernate.mutator.utils.nullable.unwrapElseError
 import kotlin.reflect.KProperty0
@@ -10,7 +10,7 @@ import kotlin.reflect.KProperty0
 interface HibernateEntityMutationSupport {
   fun <V : HibernateEntityMutationSupport?> mutatorRef(property: KProperty0<V>): HibernateRefMutator<V> {
     val currentClassNameWithFieldName =
-      FindAllHibernateAssociationsInfoBuildStep.ClassNameWithFieldName(
+      ClassNameWithFieldName(
         className = this::class.java.name,
         fieldName = property.name
       )
@@ -30,7 +30,7 @@ interface HibernateEntityMutationSupport {
 
   fun <V : HibernateEntityMutationSupport> mutatorRefs(property: KProperty0<MutableSet<V>>): HibernateCollectionMutator<V> {
     val currentClassNameWithFieldName =
-      FindAllHibernateAssociationsInfoBuildStep.ClassNameWithFieldName(
+      ClassNameWithFieldName(
         className = this::class.java.name,
         fieldName = property.name
       )

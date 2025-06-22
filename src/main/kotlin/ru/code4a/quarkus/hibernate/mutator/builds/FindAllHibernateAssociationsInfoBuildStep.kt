@@ -13,6 +13,10 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 class FindAllHibernateAssociationsInfoBuildStep {
+  companion object {
+    const val ASSOCIATIONS_JSON_RESOURCE_PATH = "ru/code4a/hibernate/gen/associations"
+  }
+
   @Serializable
   data class ClassNameWithFieldName(
     val className: String,
@@ -117,7 +121,7 @@ class FindAllHibernateAssociationsInfoBuildStep {
 
     resourceProducer.produce(
       GeneratedResourceBuildItem(
-        "ru/code4a/hibernate/gen/associations",
+        ASSOCIATIONS_JSON_RESOURCE_PATH,
         Json.encodeToString(associations).toByteArray()
       )
     )

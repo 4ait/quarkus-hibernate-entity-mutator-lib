@@ -6,12 +6,12 @@ import jakarta.persistence.OneToMany
 import jakarta.persistence.OneToOne
 import kotlinx.serialization.json.Json
 import org.hibernate.Hibernate
-import org.hibernate.bytecode.enhance.internal.tracker.SimpleFieldTracker
 import ru.code4a.quarkus.hibernate.mutator.builds.FindAllHibernateAssociationsInfoBuildStep
 import ru.code4a.quarkus.hibernate.mutator.interfaces.EntityFieldStateInitializer
 import ru.code4a.quarkus.hibernate.mutator.interfaces.EntityStateInitializer
 import ru.code4a.quarkus.hibernate.mutator.mutators.interfaces.HibernateEntityCollectionMutator
 import ru.code4a.quarkus.hibernate.mutator.mutators.interfaces.HibernateEntityRefMutator
+import ru.code4a.quarkus.hibernate.mutator.utils.hibernate.HibernateFieldAccessor
 import ru.code4a.quarkus.hibernate.mutator.utils.nullable.unwrapElseError
 import java.lang.reflect.Field
 import kotlin.reflect.jvm.jvmErasure
@@ -193,8 +193,6 @@ object HibernateEntityMutators {
     }
 
     for (associationInfo in associationsInfoMap.values) {
-      val trackChangeMethod = associationInfo.clazz.getTrackChangeMethod()
-
       val manyToManyAnnotation =
         associationInfo
           .field
@@ -225,40 +223,29 @@ object HibernateEntityMutators {
             .type
 
         if (fieldClass == Set::class.java) {
-          val fieldGetter = { entity: Any ->
-            if (!Hibernate.isInitialized(entity)) {
-              Hibernate.initialize(entity)
-            }
-
-            field.get(entity)
-          }
+          val fieldHibernateAccessor = HibernateFieldAccessor(field)
 
           val mutator =
             object : HibernateEntityCollectionMutator {
               override fun set(entity: Any, values: Collection<Any>) {
-                val entityElements = fieldGetter.invoke(entity) as MutableSet<Any>
+                val entityElements = fieldHibernateAccessor.get(entity) as MutableSet<Any>
 
                 entityElements.clear()
                 entityElements.addAll(values)
               }
 
-              override fun beforeSetManual(entity: Any, values: Collection<Any>) {}
               override fun rawSet(entity: Any, values: Collection<Any>) {
-                if (!Hibernate.isInitialized(entity)) {
-                  Hibernate.initialize(entity)
-                }
-
-                field.set(entity, values)
+                fieldHibernateAccessor.set(entity, values)
               }
 
               override fun remove(entity: Any, value: Any) {
-                val entityElements = fieldGetter(entity) as MutableSet<Any>
+                val entityElements = fieldHibernateAccessor.get(entity) as MutableSet<Any>
 
                 entityElements.remove(value)
               }
 
               override fun add(entity: Any, value: Any) {
-                val entityElements = fieldGetter.invoke(entity) as MutableSet<Any>
+                val entityElements = fieldHibernateAccessor.get(entity) as MutableSet<Any>
 
                 entityElements.add(value)
               }
@@ -301,12 +288,6 @@ object HibernateEntityMutators {
       if (oneToManyAnnotation != null) {
         val mappedByAssociation = associationInfo.mappedBy
         if (mappedByAssociation != null) {
-          val fieldKotlinProperty =
-            associationInfo
-              .field
-              .kotlinProperty
-              .unwrapElseError { "Kotlin property must be present" }
-
           val fieldClass =
             associationInfo
               .field
@@ -314,41 +295,17 @@ object HibernateEntityMutators {
 
           val field = associationInfo.field
           val mappedByField = mappedByAssociation.field
-          val mappedByFieldName = mappedByField.name
-          val mappedByAssociationTrackChangeMethod = mappedByAssociation.clazz.getTrackChangeMethod()
 
-          val mappedByFieldSetter = { obj: Any, value: Any? ->
-            if (!Hibernate.isInitialized(obj)) {
-              Hibernate.initialize(obj)
-            }
-
-            mappedByAssociationTrackChangeMethod.invoke(obj, mappedByFieldName)
-            mappedByField.set(obj, value)
-          }
-
-          val mappedByFieldGetter = { obj: Any ->
-            if (!Hibernate.isInitialized(obj)) {
-              Hibernate.initialize(obj)
-            }
-
-            mappedByField.get(obj)
-          }
-
-          val fieldGetter = { entity: Any ->
-            if (!Hibernate.isInitialized(entity)) {
-              Hibernate.initialize(entity)
-            }
-
-            field.get(entity)
-          }
+          val fieldHibernateAccessor = HibernateFieldAccessor(field)
+          val mappedByFieldHibernateAccessor = HibernateFieldAccessor(mappedByField)
 
           field.isAccessible = true
           mappedByField.isAccessible = true
 
           if (fieldClass == Set::class.java) {
-            val fieldSetter =
+            val fieldCollectionUpdater =
               { entity: Any, elementsToAdd: List<Any>, elementsToRemove: List<Any> ->
-                val entityElements = fieldGetter.invoke(entity) as MutableSet<Any>
+                val entityElements = fieldHibernateAccessor.get(entity) as MutableSet<Any>
 
                 // Update the collection in one go
                 if (elementsToRemove.isNotEmpty()) {
@@ -359,63 +316,46 @@ object HibernateEntityMutators {
                 }
               }
 
-            val preprocessAndSetWithFieldSetter =
-              { fieldSetter: (entity: Any, elementsToAdd: List<Any>, elementsToRemove: List<Any>) -> Unit, entity: Any, values: Collection<Any> ->
+            val mutator = object : HibernateEntityCollectionMutator {
+              override fun set(entity: Any, values: Collection<Any>) {
                 if (!Hibernate.isInitialized(entity)) {
                   Hibernate.initialize(entity)
                 }
 
-                val entityElements = fieldGetter.invoke(entity) as MutableSet<Any>
+                val entityElements = fieldHibernateAccessor.get(entity) as MutableSet<Any>
 
                 val newValues = values.toSet() // Convert to Set for better performance in contains() operations
 
                 // Find elements to remove (those in current collection but not in new values)
                 val elementsToRemove = entityElements.filter { it !in newValues }
                 for (elementToRemove in elementsToRemove) {
-                  mappedByFieldSetter.invoke(elementToRemove, null)
+                  mappedByFieldHibernateAccessor.set(elementToRemove, null)
                 }
 
                 // Find elements to add (those in new values but not in current collection)
                 val elementsToAdd = newValues.filter { it !in entityElements }
                 for (elementToAdd in elementsToAdd) {
-                  if (!Hibernate.isInitialized(elementToAdd)) {
-                    Hibernate.initialize(elementToAdd)
-                  }
-
-                  if (mappedByFieldGetter.invoke(elementToAdd) != null) {
+                  if (mappedByFieldHibernateAccessor.get(elementToAdd) != null) {
                     throw IllegalStateException("Entity already associated with another entity")
                   }
-                  mappedByFieldSetter.invoke(elementToAdd, entity)
+                  mappedByFieldHibernateAccessor.set(elementToAdd, entity)
                 }
 
-                fieldSetter(
+                fieldCollectionUpdater(
                   entity,
                   elementsToAdd,
                   elementsToRemove
                 )
               }
 
-            val mutator = object : HibernateEntityCollectionMutator {
-              override fun set(entity: Any, values: Collection<Any>) {
-                preprocessAndSetWithFieldSetter.invoke(fieldSetter, entity, values)
-              }
-
-              override fun beforeSetManual(entity: Any, values: Collection<Any>) {
-                preprocessAndSetWithFieldSetter.invoke({ _, _, _ -> }, entity, values)
-              }
-
               override fun rawSet(entity: Any, values: Collection<Any>) {
-                if (!Hibernate.isInitialized(entity)) {
-                  Hibernate.initialize(entity)
-                }
-
-                field.set(entity, values)
+                fieldHibernateAccessor.set(entity, values)
               }
 
               override fun remove(entity: Any, value: Any) {
-                if (mappedByFieldGetter.invoke(value) == entity) {
-                  val entityElements = fieldGetter.invoke(entity) as MutableSet<Any>
-                  mappedByFieldSetter.invoke(value, null)
+                if (mappedByFieldHibernateAccessor.get(value) == entity) {
+                  val entityElements = fieldHibernateAccessor.get(entity) as MutableSet<Any>
+                  mappedByFieldHibernateAccessor.set(value, null)
                   entityElements.remove(value)
                 } else {
                   throw IllegalStateException("Entity associated with another entity")
@@ -423,15 +363,15 @@ object HibernateEntityMutators {
               }
 
               override fun add(entity: Any, value: Any) {
-                val mappedByValue = mappedByFieldGetter.invoke(value)
+                val mappedByValue = mappedByFieldHibernateAccessor.get(value)
 
                 if (mappedByValue != null && mappedByValue != entity) {
                   throw IllegalStateException("Entity associated with another entity")
                 }
 
-                val entityElements = fieldGetter.invoke(entity) as MutableSet<Any>
+                val entityElements = fieldHibernateAccessor.get(entity) as MutableSet<Any>
 
-                mappedByFieldSetter.invoke(value, entity)
+                mappedByFieldHibernateAccessor.set(value, entity)
                 entityElements.add(value)
               }
             }
@@ -450,10 +390,10 @@ object HibernateEntityMutators {
               )
             ] = object : EntityFieldStateInitializer {
               override fun initialize(entity: Any) {
-                val collection = field.get(entity) as MutableSet<Any>
+                val collection = fieldHibernateAccessor.get(entity) as MutableSet<Any>
 
                 if (collection.isNotEmpty()) {
-                  field.set(entity, mutableSetOf<Any>())
+                  fieldHibernateAccessor.set(entity, mutableSetOf<Any>())
                   mutator.set(entity, collection)
                 }
               }
@@ -477,41 +417,30 @@ object HibernateEntityMutators {
             .field
             .type
 
+        val fieldHibernateAccessor = HibernateFieldAccessor(field)
+
         if (fieldClass == Set::class.java) {
-          val fieldGetter = { entity: Any ->
-            if (!Hibernate.isInitialized(entity)) {
-              Hibernate.initialize(entity)
-            }
-
-            field.get(entity)
-          }
-
           val mutator =
             object : HibernateEntityCollectionMutator {
               override fun set(entity: Any, values: Collection<Any>) {
-                val entityElements = fieldGetter.invoke(entity) as MutableSet<Any>
+                val entityElements = fieldHibernateAccessor.get(entity) as MutableSet<Any>
 
                 entityElements.clear()
                 entityElements.addAll(values)
               }
 
-              override fun beforeSetManual(entity: Any, values: Collection<Any>) {}
               override fun rawSet(entity: Any, values: Collection<Any>) {
-                if (!Hibernate.isInitialized(entity)) {
-                  Hibernate.initialize(entity)
-                }
-
-                field.set(entity, values)
+                fieldHibernateAccessor.set(entity, values)
               }
 
               override fun remove(entity: Any, value: Any) {
-                val entityElements = fieldGetter.invoke(entity) as MutableSet<Any>
+                val entityElements = fieldHibernateAccessor.get(entity) as MutableSet<Any>
 
                 entityElements.remove(value)
               }
 
               override fun add(entity: Any, value: Any) {
-                val entityElements = fieldGetter.invoke(entity) as MutableSet<Any>
+                val entityElements = fieldHibernateAccessor.get(entity) as MutableSet<Any>
 
                 entityElements.add(value)
               }
@@ -562,69 +491,38 @@ object HibernateEntityMutators {
           if (mappedFromFieldClass == Set::class.java) {
             val field = associationInfo.field
             field.isAccessible = true
-            val fieldName = field.name
 
             val mappedFromField = mappedFromAssociation.field
             mappedFromField.isAccessible = true
 
-            val fieldSetter = { obj: Any, value: Any? ->
-              if (!Hibernate.isInitialized(obj)) {
-                Hibernate.initialize(obj)
-              }
-
-              trackChangeMethod.invoke(obj, fieldName)
-              field.set(obj, value)
-            }
-
-            val fieldGetter = { entity: Any ->
-              if (!Hibernate.isInitialized(entity)) {
-                Hibernate.initialize(entity)
-              }
-
-              field.get(entity)
-            }
-
-            val mappedFromFieldGetter = { entity: Any ->
-              if (!Hibernate.isInitialized(entity)) {
-                Hibernate.initialize(entity)
-              }
-
-              mappedFromField.get(entity)
-            }
-
-            val preprocessAndSetWithFieldSetter =
-              { fieldSetter: (entity: Any, newValue: Any?) -> Unit, entity: Any, newValue: Any? ->
-                val currentValue = fieldGetter.invoke(entity)
-
-                if (currentValue != newValue) {
-                  if (currentValue != null) {
-                    val currentMappedFromCollection = mappedFromFieldGetter.invoke(currentValue) as MutableSet<Any>
-                    if (Hibernate.isInitialized(currentMappedFromCollection)) {
-                      currentMappedFromCollection.remove(entity)
-                    }
-                  }
-
-                  if (newValue == null) {
-                    fieldSetter.invoke(entity, null)
-                  } else {
-                    val newCollection = mappedFromFieldGetter.invoke(newValue) as MutableSet<Any>
-                    if (Hibernate.isInitialized(newCollection)) {
-                      newCollection.add(entity)
-                    }
-
-                    fieldSetter.invoke(entity, newValue)
-                  }
-                }
-              }
+            val fieldHibernateAccessor = HibernateFieldAccessor(field)
+            val mappedFromFieldHibernateAccessor = HibernateFieldAccessor(mappedFromField)
 
             val mutator =
               object : HibernateEntityRefMutator {
-                override fun beforeSetManual(entity: Any, value: Any?) {
-                  preprocessAndSetWithFieldSetter({ _, _ -> }, entity, value)
-                }
-
                 override fun set(entity: Any, value: Any?) {
-                  preprocessAndSetWithFieldSetter(fieldSetter, entity, value)
+                  val currentValue = fieldHibernateAccessor.get(entity)
+
+                  if (currentValue != value) {
+                    if (currentValue != null) {
+                      val currentMappedFromCollection =
+                        mappedFromFieldHibernateAccessor.get(currentValue) as MutableSet<Any>
+                      if (Hibernate.isInitialized(currentMappedFromCollection)) {
+                        currentMappedFromCollection.remove(entity)
+                      }
+                    }
+
+                    if (value == null) {
+                      fieldHibernateAccessor.set(entity, null)
+                    } else {
+                      val newCollection = mappedFromFieldHibernateAccessor.get(value) as MutableSet<Any>
+                      if (Hibernate.isInitialized(newCollection)) {
+                        newCollection.add(entity)
+                      }
+
+                      fieldHibernateAccessor.set(entity, value)
+                    }
+                  }
                 }
               }
 
@@ -642,10 +540,10 @@ object HibernateEntityMutators {
               )
             ] = object : EntityFieldStateInitializer {
               override fun initialize(entity: Any) {
-                val value = field.get(entity)
+                val value = fieldHibernateAccessor.get(entity)
                 if (value != null) {
                   if (Hibernate.isInitialized(value)) {
-                    val newCollection = mappedFromField.get(value) as MutableSet<Any>
+                    val newCollection = mappedFromFieldHibernateAccessor.get(value) as MutableSet<Any>
                     if (Hibernate.isInitialized(newCollection)) {
                       newCollection.add(entity)
                     }
@@ -666,16 +564,8 @@ object HibernateEntityMutators {
 
         val field = associationInfo.field
         field.isAccessible = true
-        val fieldName = field.name
 
-        val fieldSetter = { obj: Any, value: Any? ->
-          if (!Hibernate.isInitialized(obj)) {
-            Hibernate.initialize(obj)
-          }
-
-          trackChangeMethod.invoke(obj, fieldName)
-          field.set(obj, value)
-        }
+        val fieldHibernateAccessor = HibernateFieldAccessor(field)
 
         entityRefMutators[
           FindAllHibernateAssociationsInfoBuildStep.ClassNameWithFieldName(
@@ -683,10 +573,8 @@ object HibernateEntityMutators {
             fieldName = associationInfo.field.name
           )
         ] = object : HibernateEntityRefMutator {
-          override fun beforeSetManual(entity: Any, value: Any?) {}
-
           override fun set(entity: Any, value: Any?) {
-            fieldSetter.invoke(entity, value)
+            fieldHibernateAccessor.set(entity, value)
           }
         }
 
@@ -723,67 +611,31 @@ object HibernateEntityMutators {
 
         if (bidirectionalAssociation != null) {
           val field = associationInfo.field
-          val fieldName = field.name
-
           val bidirectionalField = bidirectionalAssociation.field
-          val bidirectionalFieldName = bidirectionalField.name
-          val bidirectionalHibernateTrackChangeMethod = bidirectionalAssociation.clazz.getTrackChangeMethod()
 
-          val fieldSetter = { obj: Any, value: Any? ->
-            if (!Hibernate.isInitialized(obj)) {
-              Hibernate.initialize(obj)
-            }
-
-            trackChangeMethod.invoke(obj, fieldName)
-            field.set(obj, value)
-          }
-
-          val bidirectionalFieldSetter = { obj: Any, value: Any? ->
-            if (!Hibernate.isInitialized(obj)) {
-              Hibernate.initialize(obj)
-            }
-
-            bidirectionalHibernateTrackChangeMethod.invoke(obj, bidirectionalFieldName)
-            bidirectionalField.set(obj, value)
-          }
-
-          val fieldGetter = { entity: Any ->
-            if (!Hibernate.isInitialized(entity)) {
-              Hibernate.initialize(entity)
-            }
-
-            field.get(entity)
-          }
+          val fieldHibernateAccessor = HibernateFieldAccessor(field)
+          val bidirectionalFieldHibernateAccessor = HibernateFieldAccessor(bidirectionalField)
 
           field.isAccessible = true
           bidirectionalField.isAccessible = true
 
-          val preprocessAndSetWithFieldSetter =
-            { fieldSetter: (entity: Any, newValue: Any?) -> Unit, entity: Any, value: Any? ->
-              val currentValue = fieldGetter.invoke(entity)
-
-              if (currentValue != value) {
-                if (currentValue != null) {
-                  bidirectionalFieldSetter.invoke(currentValue, null)
-                }
-
-                if (value != null) {
-                  bidirectionalFieldSetter.invoke(value, entity)
-                  fieldSetter.invoke(entity, value)
-                } else {
-                  fieldSetter.invoke(entity, null)
-                }
-              }
-            }
-
           val mutator =
             object : HibernateEntityRefMutator {
-              override fun beforeSetManual(entity: Any, value: Any?) {
-                preprocessAndSetWithFieldSetter({ _, _ -> }, entity, value)
-              }
-
               override fun set(entity: Any, value: Any?) {
-                preprocessAndSetWithFieldSetter(fieldSetter, entity, value)
+                val currentValue = fieldHibernateAccessor.get(entity)
+
+                if (currentValue != value) {
+                  if (currentValue != null) {
+                    bidirectionalFieldHibernateAccessor.set(currentValue, null)
+                  }
+
+                  if (value != null) {
+                    bidirectionalFieldHibernateAccessor.set(value, entity)
+                    fieldHibernateAccessor.set(entity, value)
+                  } else {
+                    fieldHibernateAccessor.set(entity, null)
+                  }
+                }
               }
             }
 
@@ -801,9 +653,9 @@ object HibernateEntityMutators {
             )
           ] = object : EntityFieldStateInitializer {
             override fun initialize(entity: Any) {
-              val value = field.get(entity)
+              val value = fieldHibernateAccessor.get(entity)
               if (value != null) {
-                bidirectionalFieldSetter.invoke(value, entity)
+                bidirectionalFieldHibernateAccessor.set(value, entity)
               }
             }
           }
@@ -815,14 +667,7 @@ object HibernateEntityMutators {
         field.isAccessible = true
         val fieldName = field.name
 
-        val fieldSetter = { obj: Any, value: Any? ->
-          if (!Hibernate.isInitialized(obj)) {
-            Hibernate.initialize(obj)
-          }
-
-          trackChangeMethod.invoke(obj, fieldName)
-          field.set(obj, value)
-        }
+        val fieldHibernateAccessor = HibernateFieldAccessor(field)
 
         entityRefMutators[
           FindAllHibernateAssociationsInfoBuildStep.ClassNameWithFieldName(
@@ -830,10 +675,8 @@ object HibernateEntityMutators {
             fieldName = associationInfo.field.name
           )
         ] = object : HibernateEntityRefMutator {
-          override fun beforeSetManual(entity: Any, value: Any?) {}
-
           override fun set(entity: Any, value: Any?) {
-            fieldSetter.invoke(entity, value)
+            fieldHibernateAccessor.set(entity, value)
           }
         }
 
@@ -863,32 +706,5 @@ object HibernateEntityMutators {
             it.value.map { it.value }
           )
         }
-  }
-}
-
-private fun Class<*>.getTrackChangeMethod(): (Any, String) -> Unit {
-  val trackerField = declaredFields.find { it.name == "\$\$_hibernate_tracker" }!!
-
-  trackerField.isAccessible = true
-
-  return { obj: Any, fieldName: String ->
-    if (!Hibernate.isInitialized(obj)) {
-      Hibernate.initialize(obj)
-    }
-
-    val trackerFieldValue =
-      trackerField.get(obj).let { trackerFieldValue ->
-        if (trackerFieldValue == null) {
-          val newTrackerFieldValue = SimpleFieldTracker()
-
-          trackerField.set(obj, newTrackerFieldValue)
-
-          newTrackerFieldValue
-        } else {
-          trackerFieldValue as SimpleFieldTracker
-        }
-      }
-
-    trackerFieldValue.add(fieldName)
   }
 }

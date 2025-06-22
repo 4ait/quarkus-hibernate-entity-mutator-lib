@@ -7,22 +7,6 @@ import ru.code4a.quarkus.hibernate.mutator.services.HibernateEntityMutators.enti
 import ru.code4a.quarkus.hibernate.mutator.utils.nullable.unwrapElseError
 
 object HibernateEntityMutatorProcessor {
-  fun processBeforeSet(entity: Any, fieldName: String, value: Any?) {
-    val currentClassNameWithFieldName =
-      FindAllHibernateAssociationsInfoBuildStep.ClassNameWithFieldName(
-        className = entity::class.java.name,
-        fieldName = fieldName
-      )
-
-    val entityMutator =
-      entityRefMutators[currentClassNameWithFieldName]
-        .unwrapElseError {
-          "Cannot find mutator for $currentClassNameWithFieldName"
-        }
-
-    entityMutator.beforeSetManual(entity, value)
-  }
-
   fun processSetCollection(entity: Any, fieldName: String, values: Collection<Any>) {
     val currentClassNameWithFieldName =
       FindAllHibernateAssociationsInfoBuildStep.ClassNameWithFieldName(

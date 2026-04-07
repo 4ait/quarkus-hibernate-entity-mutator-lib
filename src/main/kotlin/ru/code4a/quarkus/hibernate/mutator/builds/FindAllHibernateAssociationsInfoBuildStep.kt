@@ -4,6 +4,7 @@ import io.quarkus.deployment.annotations.BuildProducer
 import io.quarkus.deployment.annotations.BuildStep
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem
+import jakarta.persistence.Entity
 import jakarta.persistence.ManyToMany
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
@@ -14,6 +15,7 @@ import ru.code4a.quarkus.hibernate.mutator.models.ClassNameWithFieldName
 class FindAllHibernateAssociationsInfoBuildStep {
   companion object {
     const val ASSOCIATIONS_JSON_RESOURCE_PATH = "ru/code4a/hibernate/gen/associations"
+    const val ENTITY_CLASSES_JSON_RESOURCE_PATH = "ru/code4a/hibernate/gen/entities"
   }
 
   @BuildStep
@@ -25,96 +27,60 @@ class FindAllHibernateAssociationsInfoBuildStep {
       combinedIndex
         .index
         .getAnnotations(OneToMany::class.java)
-        .filter {
-          it.target().kind() == org.jboss.jandex.AnnotationTarget.Kind.FIELD
-        }
-        .map {
-          it.target().asField()
-        }
+        .filter { it.target().kind() == org.jboss.jandex.AnnotationTarget.Kind.FIELD }
+        .map { it.target().asField() }
         .associateBy { ClassNameWithFieldName(it.declaringClass().name().toString(), it.name()) }
 
     val manyToOneFieldsMap =
       combinedIndex
         .index
         .getAnnotations(ManyToOne::class.java)
-        .filter {
-          it.target().kind() == org.jboss.jandex.AnnotationTarget.Kind.FIELD
-        }
-        .map {
-          it.target().asField()
-        }
+        .filter { it.target().kind() == org.jboss.jandex.AnnotationTarget.Kind.FIELD }
+        .map { it.target().asField() }
         .associateBy { ClassNameWithFieldName(it.declaringClass().name().toString(), it.name()) }
 
     val oneToOneFieldsMap =
       combinedIndex
         .index
         .getAnnotations(OneToOne::class.java)
-        .filter {
-          it.target().kind() == org.jboss.jandex.AnnotationTarget.Kind.FIELD
-        }
-        .map {
-          it.target().asField()
-        }
+        .filter { it.target().kind() == org.jboss.jandex.AnnotationTarget.Kind.FIELD }
+        .map { it.target().asField() }
         .associateBy { ClassNameWithFieldName(it.declaringClass().name().toString(), it.name()) }
 
     val manyToManyFieldsMap =
       combinedIndex
         .index
         .getAnnotations(ManyToMany::class.java)
-        .filter {
-          it.target().kind() == org.jboss.jandex.AnnotationTarget.Kind.FIELD
-        }
-        .map {
-          it.target().asField()
-        }
+        .filter { it.target().kind() == org.jboss.jandex.AnnotationTarget.Kind.FIELD }
+        .map { it.target().asField() }
         .associateBy { ClassNameWithFieldName(it.declaringClass().name().toString(), it.name()) }
 
-    val associations = mutableListOf<ClassNameWithFieldName>()
-
-    for (oneToManyField in oneToManyFieldsMap.values) {
-      val classNameWithFieldName =
-        ClassNameWithFieldName(
-          className = oneToManyField.declaringClass().name().toString(),
-          fieldName = oneToManyField.name(),
-        )
-
-      associations.add(classNameWithFieldName)
+    val associations = buildList {
+      addAll(oneToManyFieldsMap.keys)
+      addAll(manyToOneFieldsMap.keys)
+      addAll(oneToOneFieldsMap.keys)
+      addAll(manyToManyFieldsMap.keys)
     }
 
-    for (manyToOneField in manyToOneFieldsMap.values) {
-      val classNameWithFieldName =
-        ClassNameWithFieldName(
-          className = manyToOneField.declaringClass().name().toString(),
-          fieldName = manyToOneField.name(),
-        )
-
-      associations.add(classNameWithFieldName)
-    }
-
-    for (oneToOneField in oneToOneFieldsMap.values) {
-      val classNameWithFieldName =
-        ClassNameWithFieldName(
-          className = oneToOneField.declaringClass().name().toString(),
-          fieldName = oneToOneField.name(),
-        )
-
-      associations.add(classNameWithFieldName)
-    }
-
-    for (manyToManyField in manyToManyFieldsMap.values) {
-      val classNameWithFieldName =
-        ClassNameWithFieldName(
-          className = manyToManyField.declaringClass().name().toString(),
-          fieldName = manyToManyField.name(),
-        )
-
-      associations.add(classNameWithFieldName)
-    }
+    val entityClasses =
+      combinedIndex
+        .index
+        .getAnnotations(Entity::class.java)
+        .filter { it.target().kind() == org.jboss.jandex.AnnotationTarget.Kind.CLASS }
+        .map { it.target().asClass().name().toString() }
+        .distinct()
 
     resourceProducer.produce(
       GeneratedResourceBuildItem(
         ASSOCIATIONS_JSON_RESOURCE_PATH,
         Json.encodeToString(associations).toByteArray()
+      )
+    )
+
+    resourceProducer.produce(
+      GeneratedResourceBuildItem(
+        ENTITY_CLASSES_JSON_RESOURCE_PATH,
+        Json.encodeToString(entityClasses).toByteArray()
       )
     )
   }

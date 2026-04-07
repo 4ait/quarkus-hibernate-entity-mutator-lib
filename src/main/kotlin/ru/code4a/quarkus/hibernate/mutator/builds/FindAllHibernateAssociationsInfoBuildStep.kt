@@ -70,6 +70,12 @@ class FindAllHibernateAssociationsInfoBuildStep {
         .map { it.target().asClass().name().toString() }
         .distinct()
 
+    validateNoAssociationFieldShadowingInEntityHierarchies(
+      associations = associations,
+      entityClassNames = entityClasses,
+      combinedIndex = combinedIndex
+    )
+
     resourceProducer.produce(
       GeneratedResourceBuildItem(
         ASSOCIATIONS_JSON_RESOURCE_PATH,
@@ -83,5 +89,40 @@ class FindAllHibernateAssociationsInfoBuildStep {
         Json.encodeToString(entityClasses).toByteArray()
       )
     )
+  }
+
+  private fun validateNoAssociationFieldShadowingInEntityHierarchies(
+    associations: List<ClassNameWithFieldName>,
+    entityClassNames: List<String>,
+    combinedIndex: CombinedIndexBuildItem
+  ) {
+    val associationsByClassName =
+      associations
+        .groupBy { it.className }
+        .mapValues { (_, values) -> values.map { it.fieldName }.toSet() }
+
+    entityClassNames.forEach { entityClassName ->
+      val seenFieldNames = mutableMapOf<String, String>()
+      var currentClassName: String? = entityClassName
+
+      while (currentClassName != null && currentClassName != Any::class.java.name) {
+        associationsByClassName[currentClassName].orEmpty().forEach { fieldName ->
+          val previousDeclaringClassName = seenFieldNames.putIfAbsent(fieldName, currentClassName)
+
+          require(previousDeclaringClassName == null) {
+            "Association field '$fieldName' is declared multiple times in entity inheritance chain: " +
+              "$previousDeclaringClassName and ${currentClassName}. " +
+              "This is not supported because mutator lookup by runtime class becomes ambiguous."
+          }
+        }
+
+        currentClassName =
+          combinedIndex
+            .index
+            .getClassByName(org.jboss.jandex.DotName.createSimple(currentClassName))
+            ?.superName()
+            ?.toString()
+      }
+    }
   }
 }

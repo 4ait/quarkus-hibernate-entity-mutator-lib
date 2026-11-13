@@ -19,7 +19,7 @@ plugins {
 
   `java-library`
   `maven-publish`
-  id("org.jreleaser") version "1.21.0"
+  id("org.jreleaser") version "1.27.0"
 }
 
 java {
@@ -159,7 +159,7 @@ jreleaser {
   release {
     github {
       overwrite.set(true)
-      branch.set("master")
+      branch.set("main")
     }
   }
   deploy {

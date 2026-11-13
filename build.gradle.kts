@@ -1,26 +1,39 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jreleaser.model.Active
 
 group = "ru.code4a"
 version = file("version").readText().trim()
 
 plugins {
-  val kotlinVersion = "2.0.21"
+  val kotlinVersion = "2.4.10"
 
   kotlin("jvm") version kotlinVersion
   kotlin("plugin.serialization") version kotlinVersion
+  // Test entities must be open and have a no-arg constructor, as entities of Quarkus applications do.
   kotlin("plugin.allopen") version kotlinVersion
-  kotlin("plugin.noarg") version kotlinVersion
+  kotlin("plugin.jpa") version kotlinVersion
 
-  id("org.kordamp.gradle.jandex") version "1.1.0"
+  id("org.kordamp.gradle.jandex") version "2.1.0"
+  // Tests run against entities enhanced the same way Quarkus enhances them.
+  id("org.hibernate.orm") version "7.4.9.Final"
 
   `java-library`
   `maven-publish`
-  id("org.jreleaser") version "1.12.0"
+  id("org.jreleaser") version "1.21.0"
 }
 
 java {
+  sourceCompatibility = JavaVersion.VERSION_25
+  targetCompatibility = JavaVersion.VERSION_25
+
   withJavadocJar()
   withSourcesJar()
+}
+
+kotlin {
+  compilerOptions {
+    jvmTarget = JvmTarget.JVM_25
+  }
 }
 
 publishing {
@@ -88,11 +101,20 @@ repositories {
 }
 
 allOpen {
-  annotation("jakarta.enterprise.context.ApplicationScoped")
+  annotation("jakarta.persistence.Entity")
+  annotation("jakarta.persistence.MappedSuperclass")
 }
 
-noArg {
-  annotation("org.eclipse.microprofile.graphql.Input")
+// Test entities are enhanced the way Quarkus enhances entities: lazy loading and dirty tracking,
+// without Hibernate association management (the mutators manage associations).
+hibernate {
+  sourceSet.set("test")
+  enhancement {
+    enableLazyInitialization.set(true)
+    enableDirtyTracking.set(true)
+    enableAssociationManagement.set(false)
+    enableExtendedEnhancement.set(false)
+  }
 }
 
 tasks.withType<Test> {
@@ -100,25 +122,23 @@ tasks.withType<Test> {
   dependsOn(tasks["jandex"])
 }
 
-val quarkusVersion: String by project
+val quarkusVersion = project.property("quarkusVersion") as String
 
 dependencies {
   implementation("io.quarkus:quarkus-arc:${quarkusVersion}")
+  implementation("io.quarkus:quarkus-hibernate-orm:${quarkusVersion}")
+  implementation("io.quarkus:quarkus-core-deployment:${quarkusVersion}")
 
   implementation(kotlin("reflect"))
+  implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
-  implementation("com.lambdaworks:scrypt:1.4.0")
-  implementation("ru.code4a:error-handling:1.0.0")
-  implementation("io.quarkus:quarkus-hibernate-orm:${quarkusVersion}")
-  implementation("io.quarkus:quarkus-smallrye-graphql:${quarkusVersion}")
-  implementation("io.quarkus:quarkus-core-deployment:${quarkusVersion}")
-  implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
-
-  implementation("org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.7.3")
-  implementation("org.jetbrains.kotlinx:kotlinx-serialization-protobuf:1.7.3")
-
+  // The Hibernate enhancer resolves entity supertypes through the testCompileClasspath configuration,
+  // which, unlike the test source set classpath, does not contain the main classes.
+  testImplementation(files(sourceSets.main.get().output.classesDirs))
   testImplementation(kotlin("test"))
-  testImplementation("org.mockito:mockito-core:5.12.0")
+  testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+  testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
+  testRuntimeOnly("com.h2database:h2:2.3.232")
 }
 
 tasks.named("compileTestKotlin", org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask::class.java) {

@@ -1,14 +1,21 @@
 package ru.code4a.quarkus.hibernate.mutator.services.mutators.build.mutators
 
 import ru.code4a.quarkus.hibernate.mutator.mutators.interfaces.HibernateEntityCollectionMutator
+import ru.code4a.quarkus.hibernate.mutator.services.inverse.InverseCollectionSynchronizer
 import ru.code4a.quarkus.hibernate.mutator.utils.hibernate.HibernateFieldAccessor
+import ru.code4a.quarkus.hibernate.mutator.utils.hibernate.HibernateLazyState
 
 /**
- * Mutator for bidirectional OneToMany relationships
+ * Mutator for bidirectional OneToMany relationships.
+ *
+ * [add] and [remove] change the child reference and keep the collection in line without loading it
+ * (see [InverseCollectionSynchronizer]). [set] replaces the whole collection, so it has to know
+ * the current elements and loads the collection when it is not loaded yet.
  */
 internal class BidirectionalOneToManyMutator(
   private val ownerAccessor: HibernateFieldAccessor,
-  private val inverseAccessor: HibernateFieldAccessor
+  private val inverseAccessor: HibernateFieldAccessor,
+  private val inverseCollections: InverseCollectionSynchronizer
 ) : HibernateEntityCollectionMutator {
 
   override fun set(entity: Any, values: Collection<Any>) {
@@ -42,32 +49,31 @@ internal class BidirectionalOneToManyMutator(
   }
 
   override fun remove(entity: Any, value: Any) {
-    if (inverseAccessor.get(value) == entity) {
-      inverseAccessor.set(value, null)
-      getCollection(entity).remove(value)
-    } else {
+    if (!HibernateLazyState.refersTo(inverseAccessor.get(value), entity)) {
       throw IllegalStateException("Entity is not associated with this collection")
     }
+
+    inverseAccessor.set(value, null)
+    inverseCollections.removeChild(owner = entity, child = value)
   }
 
   override fun add(entity: Any, value: Any) {
-    val currentOwner = inverseAccessor.get(value)
-    if (currentOwner != null && currentOwner != entity) {
-      throw IllegalStateException("Entity is already associated with another entity")
-    }
+    validateNotAssociated(value, entity)
 
     inverseAccessor.set(value, entity)
-    getCollection(entity).add(value)
+    inverseCollections.addChild(owner = entity, child = value)
   }
 
   private fun validateNotAssociated(element: Any, expectedOwner: Any) {
     val currentOwner = inverseAccessor.get(element)
-    if (currentOwner != null && currentOwner != expectedOwner) {
+
+    if (currentOwner != null && !HibernateLazyState.refersTo(currentOwner, expectedOwner)) {
       throw IllegalStateException("Entity is already associated with another entity")
     }
   }
 
   private fun getCollection(entity: Any): MutableSet<Any> {
+    @Suppress("UNCHECKED_CAST")
     return ownerAccessor.get(entity) as MutableSet<Any>
   }
 }

@@ -1,0 +1,11 @@
+[
+  {"className": "ru.code4a.quarkus.hibernate.mutator.test.entities.Department", "fieldName": "employees"},
+  {"className": "ru.code4a.quarkus.hibernate.mutator.test.entities.Employee", "fieldName": "department"},
+  {"className": "ru.code4a.quarkus.hibernate.mutator.test.entities.Employee", "fieldName": "mentor"},
+  {"className": "ru.code4a.quarkus.hibernate.mutator.test.entities.Organization", "fieldName": "members"},
+  {"className": "ru.code4a.quarkus.hibernate.mutator.test.entities.Member", "fieldName": "organization"},
+  {"className": "ru.code4a.quarkus.hibernate.mutator.test.entities.Person", "fieldName": "passport"},
+  {"className": "ru.code4a.quarkus.hibernate.mutator.test.entities.Passport", "fieldName": "person"},
+  {"className": "ru.code4a.quarkus.hibernate.mutator.test.entities.Project", "fieldName": "tags"},
+  {"className": "ru.code4a.quarkus.hibernate.mutator.test.entities.Team", "fieldName": "players"}
+]

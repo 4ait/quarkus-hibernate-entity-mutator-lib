@@ -2,9 +2,11 @@ package ru.code4a.quarkus.hibernate.mutator.services.mutators.build.initializers
 
 import ru.code4a.quarkus.hibernate.mutator.interfaces.EntityFieldStateInitializer
 import ru.code4a.quarkus.hibernate.mutator.utils.hibernate.HibernateFieldAccessor
+import ru.code4a.quarkus.hibernate.mutator.utils.hibernate.HibernateLazyState
 
 /**
- * Initializer for bidirectional OneToOne relationships
+ * Initializer for bidirectional OneToOne relationships: the partner of a new entity points back to it.
+ * A partner that is not loaded is loaded first (one row), see [HibernateLazyState.loadForWrite].
  */
 internal class BidirectionalOneToOneInitializer(
   private val accessor: HibernateFieldAccessor,
@@ -13,6 +15,6 @@ internal class BidirectionalOneToOneInitializer(
 
   override fun initialize(entity: Any) {
     val value = accessor.get(entity) ?: return
-    inverseAccessor.set(value, entity)
+    inverseAccessor.set(HibernateLazyState.loadForWrite(value), entity)
   }
 }

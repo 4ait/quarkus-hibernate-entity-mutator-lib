@@ -1,36 +1,31 @@
 package ru.code4a.quarkus.hibernate.mutator.services.mutators.build.mutators
 
-import org.hibernate.Hibernate
 import ru.code4a.quarkus.hibernate.mutator.mutators.interfaces.HibernateEntityRefMutator
+import ru.code4a.quarkus.hibernate.mutator.services.inverse.InverseCollectionSynchronizer
 import ru.code4a.quarkus.hibernate.mutator.utils.hibernate.HibernateFieldAccessor
 
 /**
- * Mutator for bidirectional ManyToOne relationships
+ * Mutator for bidirectional ManyToOne relationships.
+ *
+ * Moves the child from the inverse collection of the previous owner to the collection of the new one.
+ * Collections that are not loaded are not loaded for this; see [InverseCollectionSynchronizer].
  */
 internal class BidirectionalManyToOneRefMutator(
   private val manyAccessor: HibernateFieldAccessor,
-  private val oneAccessor: HibernateFieldAccessor
+  private val inverseCollections: InverseCollectionSynchronizer
 ) : HibernateEntityRefMutator {
 
   override fun set(entity: Any, value: Any?) {
     val currentValue = manyAccessor.get(entity)
 
-    if (currentValue == value) return
+    if (currentValue === value) return
 
-    // Remove from old collection
     if (currentValue != null) {
-      val oldCollection = oneAccessor.get(currentValue) as MutableSet<Any>
-      if (Hibernate.isInitialized(oldCollection)) {
-        oldCollection.remove(entity)
-      }
+      inverseCollections.removeChild(owner = currentValue, child = entity)
     }
 
-    // Add to new collection
     if (value != null) {
-      val newCollection = oneAccessor.get(value) as MutableSet<Any>
-      if (Hibernate.isInitialized(newCollection)) {
-        newCollection.add(entity)
-      }
+      inverseCollections.addChild(owner = value, child = entity)
     }
 
     manyAccessor.set(entity, value)

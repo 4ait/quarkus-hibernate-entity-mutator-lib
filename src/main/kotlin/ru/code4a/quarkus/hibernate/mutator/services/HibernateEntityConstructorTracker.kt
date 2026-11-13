@@ -5,7 +5,6 @@ object HibernateEntityConstructorTracker {
 
   @JvmStatic
   fun isEntityConstructorInProgress(): Boolean {
-    println(CONSTRUCTOR_COUNTERS.get() > 0)
     return CONSTRUCTOR_COUNTERS.get() > 0
   }
 

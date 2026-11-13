@@ -1,0 +1,14 @@
+[
+  "ru.code4a.quarkus.hibernate.mutator.test.entities.Department",
+  "ru.code4a.quarkus.hibernate.mutator.test.entities.Employee",
+  "ru.code4a.quarkus.hibernate.mutator.test.entities.Organization",
+  "ru.code4a.quarkus.hibernate.mutator.test.entities.Company",
+  "ru.code4a.quarkus.hibernate.mutator.test.entities.Agency",
+  "ru.code4a.quarkus.hibernate.mutator.test.entities.Member",
+  "ru.code4a.quarkus.hibernate.mutator.test.entities.Person",
+  "ru.code4a.quarkus.hibernate.mutator.test.entities.Passport",
+  "ru.code4a.quarkus.hibernate.mutator.test.entities.Project",
+  "ru.code4a.quarkus.hibernate.mutator.test.entities.Tag",
+  "ru.code4a.quarkus.hibernate.mutator.test.entities.Team",
+  "ru.code4a.quarkus.hibernate.mutator.test.entities.Player"
+]

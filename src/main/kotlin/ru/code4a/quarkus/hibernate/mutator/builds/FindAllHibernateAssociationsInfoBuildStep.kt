@@ -4,19 +4,33 @@ import io.quarkus.deployment.annotations.BuildProducer
 import io.quarkus.deployment.annotations.BuildStep
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem
+import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem
 import jakarta.persistence.Entity
 import jakarta.persistence.ManyToMany
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
 import jakarta.persistence.OneToOne
 import kotlinx.serialization.json.Json
+import org.hibernate.integrator.spi.Integrator
 import ru.code4a.quarkus.hibernate.mutator.models.ClassNameWithFieldName
+import ru.code4a.quarkus.hibernate.mutator.services.inverse.InverseCollectionSynchronizationIntegrator
 
 class FindAllHibernateAssociationsInfoBuildStep {
   companion object {
     const val ASSOCIATIONS_JSON_RESOURCE_PATH = "ru/code4a/hibernate/gen/associations"
     const val ENTITY_CLASSES_JSON_RESOURCE_PATH = "ru/code4a/hibernate/gen/entities"
   }
+
+  /**
+   * In JVM mode Hibernate finds the integrator through `META-INF/services`;
+   * a native image needs the service provider registered explicitly.
+   */
+  @BuildStep
+  fun registerInverseCollectionSynchronizationIntegrator(): ServiceProviderBuildItem =
+    ServiceProviderBuildItem(
+      Integrator::class.java.name,
+      InverseCollectionSynchronizationIntegrator::class.java.name
+    )
 
   @BuildStep
   fun transformEntities(

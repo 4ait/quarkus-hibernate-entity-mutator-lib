@@ -3,6 +3,7 @@ import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
 import jakarta.persistence.OneToOne
 import ru.code4a.quarkus.hibernate.mutator.builds.utils.AssociationInfo
+import ru.code4a.quarkus.hibernate.mutator.services.inverse.InverseCollectionSynchronizer
 import ru.code4a.quarkus.hibernate.mutator.services.mutators.build.initializers.BidirectionalManyToOneInitializer
 import ru.code4a.quarkus.hibernate.mutator.services.mutators.build.initializers.BidirectionalOneToManyInitializer
 import ru.code4a.quarkus.hibernate.mutator.services.mutators.build.initializers.BidirectionalOneToOneInitializer
@@ -75,8 +76,13 @@ internal class MutatorBuilder(private val association: AssociationInfo) {
   private fun buildBidirectionalOneToMany(): MutatorBuildResult {
     val accessor = HibernateFieldAccessor(association.field)
     val mappedByAccessor = HibernateFieldAccessor(association.mappedBy!!.field)
+    val inverseCollections =
+      InverseCollectionSynchronizer(
+        childToOwnerAccessor = mappedByAccessor,
+        ownerToCollectionAccessor = accessor
+      )
 
-    val mutator = BidirectionalOneToManyMutator(accessor, mappedByAccessor)
+    val mutator = BidirectionalOneToManyMutator(accessor, mappedByAccessor, inverseCollections)
     val initializer = BidirectionalOneToManyInitializer(accessor, mutator)
 
     return MutatorBuildResult(
@@ -101,8 +107,13 @@ internal class MutatorBuilder(private val association: AssociationInfo) {
 
     validateSetType(association.mappedFrom!!.field.type)
 
-    val mutator = BidirectionalManyToOneRefMutator(accessor, mappedFromAccessor)
-    val initializer = BidirectionalManyToOneInitializer(accessor, mappedFromAccessor)
+    val inverseCollections =
+      InverseCollectionSynchronizer(
+        childToOwnerAccessor = accessor,
+        ownerToCollectionAccessor = mappedFromAccessor
+      )
+    val mutator = BidirectionalManyToOneRefMutator(accessor, inverseCollections)
+    val initializer = BidirectionalManyToOneInitializer(accessor, inverseCollections)
 
     return MutatorBuildResult(
       refMutator = mutator,
